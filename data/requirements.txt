@@ -1,0 +1,13 @@
+# requirements.txt (Clean Version)
+Flask
+Flask-SQLAlchemy
+Flask-Login
+Werkzeug
+SQLAlchemy
+Jinja2
+waitress
+python-dotenv
+blinker
+click
+itsdangerous
+# 如果你确定用到了其他库，请也加在这里，但不要加本地路径或 @ file:///...
