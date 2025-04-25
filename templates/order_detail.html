@@ -1,0 +1,166 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}订单详情 {{ order.order_number }} - {{ super() }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-file-earmark-text"></i> 订单详情</h1>
+    <div>
+        <a href="{{ url_for('order_list') }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> 返回列表</a>
+        {% if current_user.role in ['owner', 'waiter'] %}
+        <a href="{{ url_for('order_create') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> 新增订单</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-4 shadow-sm">
+    <div class="card-header">
+        <h5 class="mb-0">订单号: {{ order.order_number }}</h5>
+    </div>
+    <div class="card-body">
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <p><strong>下单时间：</strong> {{ order.created_at.strftime('%Y-%m-%d %H:%M:%S') if order.created_at else 'N/A' }}</p>
+                <p><strong>支付方式：</strong>
+                    {% if order.payment_method == 'cash' %}<span class="badge bg-secondary"><i class="bi bi-cash"></i> 现金</span>
+                    {% elif order.payment_method == 'wechat' %}<span class="badge bg-success"><i class="bi bi-wechat"></i> 微信</span>
+                    {% elif order.payment_method == 'alipay' %}<span class="badge bg-primary"><i class="bi bi-alipay"></i> 支付宝</span>
+                     {% elif order.payment_method == 'card' %}<span class="badge bg-info"><i class="bi bi-credit-card"></i> 银行卡</span>
+                    {% else %}<span class="badge bg-secondary">{{ order.payment_method or '其他' }}</span>
+                    {% endif %}
+                </p>
+                 <p><strong>订单来源：</strong>
+                     {% if order.source == 'pos' %}<span class="badge bg-light text-dark border">店内</span>
+                     {% elif order.source == 'meituan' %}<span class="badge bg-warning text-dark">美团</span>
+                     {% elif order.source == 'own_app' %}<span class="badge bg-info">自有APP</span>
+                     {% elif order.source == 'qr_code' %}<span class="badge bg-success">扫码点餐</span>
+                     {% else %}<span class="badge bg-secondary">{{order.source or '未知'}}</span>
+                     {% endif %}
+                 </p>
+            </div>
+            <div class="col-md-6">
+                <p><strong>顾客：</strong>
+                    {% if order.member %}
+                     <a href="{{ url_for('member_detail', member_id=order.member.id) }}" class="link-info">
+                        <i class="bi bi-person-check-fill"></i> {{ order.member.name }} ({{ order.member.phone }})
+                     </a>
+                    {% else %}
+                    <span class="text-muted">匿名顾客</span>
+                    {% endif %}
+                </p>
+                <p><strong>服务员：</strong> {{ order.waiter.username if order.waiter else 'N/A' }} (ID: {{ order.waiter_id }})</p>
+                <p><strong>订单状态：</strong>
+                    {% if order.status == 'pending' %}<span class="badge fs-6 text-bg-warning">待处理</span>
+                    {% elif order.status == 'cooking' %}<span class="badge fs-6 text-bg-primary">制作中</span>
+                    {% elif order.status == 'completed' %}<span class="badge fs-6 text-bg-success">已完成</span>
+                    {% elif order.status == 'cancelled' %}<span class="badge fs-6 text-bg-danger">已取消</span>
+                    {% else %}<span class="badge fs-6 text-bg-secondary">{{ order.status }}</span>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+
+         <hr>
+
+        <h5 class="mb-3">菜品明细</h5>
+        <div class="table-responsive">
+            <table class="table table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>菜品名称</th>
+                        {# <th><small>菜品ID</small></th> #}
+                        <th>类别</th>
+                        <th>单价</th>
+                        <th>数量</th>
+                        <th>小计</th>
+                        <th>备注</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in order.items %}
+                    <tr {% if item.dish and item.dish.category == 'diy' %}class="table-info"{% endif %}>
+                        <td>{{ item.dish.name if item.dish else '菜品已删除' }}</td>
+                        {# <td><small class="text-muted">{{ item.dish_id }}</small></td> #}
+                        <td>
+                            {% if item.dish %}
+                                {% if item.dish.category == 'diy' %}<span class="badge bg-info text-dark">DIY饮品</span>
+                                {% elif item.dish.category == 'heritage' %}<span class="badge bg-success">传承菜</span>
+                                {% else %}<span class="badge bg-secondary">普通</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="badge bg-danger">未知</span>
+                            {% endif %}
+                        </td>
+                        <td>¥{{ "%.2f"|format(item.price) }}</td>
+                        <td>{{ item.quantity }}</td>
+                        <td>¥{{ "%.2f"|format(item.price * item.quantity) }}</td>
+                        <td><small>{{ item.special_request or '-' }}</small></td>
+                    </tr>
+                     {% if item.dish and item.dish.category == 'diy' and item.dish.description %} {# Display DIY details #}
+                        {% set diy_details = item.dish.description | fromjson %}
+                        <tr class="table-info">
+                            <td colspan="7" class="py-1 px-3">
+                                <small class="text-muted">
+                                    &nbsp;&nbsp;<i class="bi bi-cup-straw"></i>
+                                    {% if diy_details.base %}底:{{ diy_details.base.name }} {% endif %}
+                                    {% if diy_details.sweetener %}甜:{{ diy_details.sweetener.name }} {% endif %}
+                                    {% if diy_details.toppings %}料:[{{ diy_details.toppings | map(attribute='name') | join(', ') }}]{% endif %}
+                                </small>
+                            </td>
+                        </tr>
+                     {% endif %}
+                    {% else %}
+                    <tr><td colspan="7" class="text-center text-muted">此订单无菜品项</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-light">
+                        <td colspan="5" class="text-end"><strong>菜品总计:</strong></td>
+                        <td colspan="2"><strong>¥{{ "%.2f"|format(order.total_amount) }}</strong></td>
+                    </tr>
+                    {% if order.discount > 0 %}
+                    <tr class="table-light">
+                        <td colspan="5" class="text-end"><strong>折扣:</strong></td>
+                        <td colspan="2"><strong class="text-danger">-¥{{ "%.2f"|format(order.discount) }}</strong></td>
+                    </tr>
+                    {% endif %}
+                    <tr class="table-light fs-5">
+                        <td colspan="5" class="text-end"><strong>实付金额:</strong></td>
+                        <td colspan="2"><strong class="text-primary">¥{{ "%.2f"|format(order.final_amount) }}</strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-pencil-square"></i> 订单操作</h5>
+    </div>
+    <div class="card-body">
+        <form action="{{ url_for('update_order_status', order_id=order.id) }}" method="post" class="d-inline-block me-3">
+            <div class="input-group">
+                 <label class="input-group-text" for="status"><i class="bi bi-tag"></i> 状态</label>
+                <select class="form-select" id="status" name="status" {% if order.status in ['completed', 'cancelled'] %}disabled{% endif %}>
+                    <option value="pending" {% if order.status == 'pending' %}selected{% endif %}>待处理</option>
+                    <option value="cooking" {% if order.status == 'cooking' %}selected{% endif %}>制作中</option>
+                    <option value="completed" {% if order.status == 'completed' %}selected{% endif %}>已完成</option>
+                    <option value="cancelled" {% if order.status == 'cancelled' %}selected{% endif %}>已取消</option>
+                </select>
+                <button type="submit" class="btn btn-primary" {% if order.status in ['completed', 'cancelled'] %}disabled{% endif %}>更新状态</button>
+            </div>
+             {% if order.status in ['completed', 'cancelled'] %}
+             <small class="text-muted d-block mt-1">订单已终结，无法更改状态。</small>
+             {% endif %}
+        </form>
+         {# Add other actions like Print button if needed #}
+         {# <button class="btn btn-secondary"><i class="bi bi-printer"></i> 打印小票</button> #}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+{# Add specific JS for this page if needed #}
+{% endblock %}

@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>菜单管理 - 永杰饭庄管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-rbsA2VBKQhggwzxH7pPCaAqO46MgnOM80zW1RWuH61DGLwZJEdK2Kadq2F9CUG65" crossorigin="anonymous">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body { padding-top: 70px; } /* Increased padding for fixed navbar */
+        .table th { white-space: nowrap; }
+        .action-buttons .btn { margin-bottom: 5px; } /* Add space between buttons on small screens */
+    </style>
+</head>
+<body>
+    {# --- Navbar (从 base_admin.html 继承或直接包含) --- #}
+    {# 假设你使用了 base_admin.html #}
+    {% extends 'base_admin.html' %}
+
+    {% block title %}菜单管理 - {{ super() }}{% endblock %}
+
+    {% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-card-list"></i> 菜单管理</h1>
+        {% if current_user.role in ['owner', 'chef'] %}
+        <a href="{{ url_for('menu_add') }}" class="btn btn-primary"><i class="bi bi-plus-circle"></i> 添加菜品</a>
+        {% endif %}
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>名称</th>
+                            <th>类别</th>
+                            <th>价格</th>
+                            <th>成本</th>
+                            <th>状态</th>
+                            <th style="min-width: 210px;">操作</th> {# Increased width for delete button #}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for dish in dishes %}
+                        <tr class="{{ 'table-secondary text-muted' if not dish.is_available else '' }}">
+                            <td>{{ dish.id }}</td>
+                            <td>{{ dish.name }}</td>
+                            <td>
+                                {% if dish.category == 'regular' %}<span class="badge bg-primary">普通菜品</span>
+                                {% elif dish.category == 'heritage' %}<span class="badge bg-success">传承菜</span>
+                                {% elif dish.category == 'diy' %}<span class="badge bg-info text-dark">DIY饮品</span>
+                                {% else %}<span class="badge bg-secondary">{{ dish.category }}</span>
+                                {% endif %}
+                            </td>
+                            <td>¥{{ "%.2f"|format(dish.price) }}</td>
+                            <td>¥{{ "%.2f"|format(dish.cost) }}</td>
+                            <td>
+                                {% if dish.is_available %}<span class="badge bg-success">可用</span>
+                                {% else %}<span class="badge bg-danger">下架</span>
+                                {% endif %}
+                            </td>
+                            <td class="action-buttons">
+                                {% if dish.category != 'diy' %}
+                                    {# --- 编辑按钮 --- #}
+                                    <button type="button" class="btn btn-sm btn-outline-primary me-1 edit-dish-btn"
+                                           data-bs-toggle="modal" data-bs-target="#editDishModal"
+                                           data-id="{{ dish.id }}" data-name="{{ dish.name }}" data-category="{{ dish.category }}"
+                                           data-price="{{ dish.price }}" data-cost="{{ dish.cost }}"
+                                           data-description="{{ dish.description or '' }}" data-heritage-history="{{ dish.heritage_history or '' }}"
+                                           data-is-available="{{ 'true' if dish.is_available else 'false' }}"> {# Pass availability state #}
+                                        <i class="bi bi-pencil"></i> 编辑
+                                    </button>
+
+                                    {# --- 上下架表单 --- #}
+                                    <form method="post" action="{{ url_for('toggle_dish_status') }}" class="d-inline">
+                                        <input type="hidden" name="dish_id" value="{{ dish.id }}">
+                                        {% if dish.is_available %}
+                                        <button type="submit" class="btn btn-sm btn-outline-warning me-1" title="下架">
+                                            <i class="bi bi-arrow-down-circle"></i> 下架
+                                        </button>
+                                        {% else %}
+                                        <button type="submit" class="btn btn-sm btn-outline-success me-1" title="上架">
+                                            <i class="bi bi-arrow-up-circle"></i> 上架
+                                        </button>
+                                        {% endif %}
+                                    </form>
+
+                                    {# --- !! 新增: 删除按钮 (仅 Owner 可见) !! --- #}
+                                    {% if current_user.role == 'owner' %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger delete-dish-btn"
+                                            data-bs-toggle="modal" data-bs-target="#deleteDishModal"
+                                            data-id="{{ dish.id }}"
+                                            data-name="{{ dish.name }}"
+                                            title="删除菜品">
+                                        <i class="bi bi-trash"></i> 删除
+                                    </button>
+                                    {% endif %}
+                                    {# --- !! 删除按钮结束 !! --- #}
+
+                                {% else %}
+                                    <span class="text-muted fst-italic small">系统生成/不可操作</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="text-center text-muted">暂无菜品数据</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {# --- 编辑菜品模态框 (保持不变，但确保 action 指向正确) --- #}
+    <div class="modal fade" id="editDishModal" tabindex="-1" aria-labelledby="editDishModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="editDishModalLabel">编辑菜品</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            {# Form action points to the POST handler #}
+            <form id="editDishForm" action="{{ url_for('handle_edit_dish') }}" method="post">
+              <input type="hidden" id="edit-dish-id" name="dish_id">
+              {# ... 其他编辑表单字段 ... #}
+               <div class="row g-3">
+                   <div class="col-md-6 mb-3">
+                       <label for="edit-name" class="form-label">菜品名称</label>
+                       <input type="text" class="form-control" id="edit-name" name="name" required>
+                   </div>
+                   <div class="col-md-6 mb-3">
+                       <label for="edit-category" class="form-label">菜品类别</label>
+                       <select class="form-select" id="edit-category" name="category" required>
+                           <option value="regular">普通菜品</option>
+                           <option value="heritage">传承菜</option>
+                       </select>
+                   </div>
+               </div>
+               <div class="row g-3">
+                   <div class="col-md-6 mb-3">
+                       <label for="edit-price" class="form-label">售价</label>
+                       <div class="input-group"><span class="input-group-text">¥</span><input type="number" class="form-control" id="edit-price" name="price" step="0.01" min="0" required></div>
+                   </div>
+                   <div class="col-md-6 mb-3">
+                       <label for="edit-cost" class="form-label">成本</label>
+                       <div class="input-group"><span class="input-group-text">¥</span><input type="number" class="form-control" id="edit-cost" name="cost" step="0.01" min="0" required></div>
+                   </div>
+               </div>
+               <div class="mb-3">
+                   <label for="edit-description" class="form-label">菜品描述</label>
+                   <textarea class="form-control" id="edit-description" name="description" rows="3"></textarea>
+               </div>
+               <div class="mb-3 edit-heritage-fields" style="display: none;">
+                   <label for="edit-heritage-history" class="form-label">传承历史</label>
+                   <textarea class="form-control" id="edit-heritage-history" name="heritage_history" rows="5"></textarea>
+               </div>
+               <div class="form-check mb-3">
+                   <input class="form-check-input" type="checkbox" value="on" id="edit-is-available" name="is_available">
+                   <label class="form-check-label" for="edit-is-available">是否可用 (上架)</label>
+               </div>
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-primary" id="saveDishBtn">保存更改</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# --- !! 新增: 删除确认模态框 !! --- #}
+    <div class="modal fade" id="deleteDishModal" tabindex="-1" aria-labelledby="deleteDishModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header bg-danger text-white">
+            <h5 class="modal-title" id="deleteDishModalLabel"><i class="bi bi-exclamation-triangle-fill"></i> 确认删除菜品</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p>您确定要永久删除菜品 <strong id="delete-dish-name" class="text-danger"></strong> 吗？</p>
+            <p class="text-muted small">此操作无法撤销。</p>
+            <form id="deleteDishForm" action="{{ url_for('delete_dish') }}" method="post">
+              <input type="hidden" id="delete-dish-id" name="dish_id">
+            </form>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+            <button type="button" class="btn btn-danger" id="confirmDeleteDishBtn"><i class="bi bi-trash"></i> 确认删除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    {# --- !! 删除模态框结束 !! --- #}
+
+    {% endblock %} {# End block content #}
+
+
+    {% block scripts %}
+    {{ super() }} {# Include base scripts #}
+    <script>
+        $(document).ready(function() {
+            // --- 编辑模态框逻辑 (添加 isAvailable 数据处理) ---
+            $('.edit-dish-btn').click(function() {
+                const id = $(this).data('id');
+                const name = $(this).data('name');
+                const category = $(this).data('category');
+                const price = $(this).data('price');
+                const cost = $(this).data('cost');
+                const description = $(this).data('description');
+                const heritageHistory = $(this).data('heritage-history');
+                const isAvailable = $(this).data('is-available') === true || $(this).data('is-available') === 'true'; // Get availability data
+
+                $('#edit-dish-id').val(id);
+                $('#edit-name').val(name);
+                $('#edit-category').val(category);
+                $('#edit-price').val(price);
+                $('#edit-cost').val(cost);
+                $('#edit-description').val(description);
+                $('#edit-heritage-history').val(heritageHistory);
+                $('#edit-is-available').prop('checked', isAvailable); // Set checkbox state
+
+                // Show/hide heritage field based on category
+                if (category === 'heritage') { $('.edit-heritage-fields').show(); }
+                else { $('.edit-heritage-fields').hide(); }
+
+                // Set form action dynamically (optional if using POST to /menu/edit)
+                // $('#editDishForm').attr('action', `/menu/${id}/edit`); // If using route with ID
+                 $('#editDishForm').attr('action', "{{ url_for('handle_edit_dish') }}"); // Point to POST handler
+            });
+
+            $('#edit-category').change(function() {
+                if ($(this).val() === 'heritage') { $('.edit-heritage-fields').show(); }
+                else { $('.edit-heritage-fields').hide(); }
+            });
+
+            $('#saveDishBtn').click(function() {
+                $('#editDishForm').submit();
+            });
+
+            // --- !! 新增：删除模态框逻辑 !! ---
+            $('.delete-dish-btn').click(function() {
+                const id = $(this).data('id');
+                const name = $(this).data('name');
+                $('#delete-dish-id').val(id); // Set dish_id in the hidden input of delete form
+                $('#delete-dish-name').text(name); // Show dish name in modal body
+            });
+
+            $('#confirmDeleteDishBtn').click(function() {
+                $('#deleteDishForm').submit(); // Submit the hidden form
+            });
+            // --- !! 删除逻辑结束 !! ---
+        });
+    </script>
+    {% endblock %} {# End block scripts #}

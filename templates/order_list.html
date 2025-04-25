@@ -1,0 +1,217 @@
+{% extends 'base_admin.html' %}
+
+{% block title %}订单管理 - {{ super() }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    .table th { white-space: nowrap; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-receipt"></i> 订单管理</h1>
+    <div>
+        {% if current_user.role in ['owner', 'waiter'] %}
+        <a href="{{ url_for('order_create') }}" class="btn btn-primary"><i class="bi bi-plus-lg"></i> 新增订单</a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-4 shadow-sm">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h5 class="mb-0">订单列表</h5>
+        <div class="d-flex align-items-center">
+            {# Simple Search Form - Consider making it a GET request for bookmarkable search #}
+            {# <form method="get" action="{{ url_for('order_list') }}" class="d-flex me-2">
+                <input type="text" class="form-control form-control-sm" name="search" placeholder="搜索订单号/顾客" value="{{ search_term or '' }}">
+                <button class="btn btn-sm btn-outline-secondary" type="submit"><i class="bi bi-search"></i></button>
+            </form> #}
+            <span class="badge bg-secondary ms-2">总 {{ pagination.total if pagination else orders|length }} 条</span>
+        </div>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                    <tr>
+                        <th>订单号</th>
+                        <th>下单时间</th>
+                        <th>顾客</th>
+                        <th>金额</th>
+                        <th>状态</th>
+                        <th>支付方式</th>
+                        <th>来源</th>
+                        <th style="min-width: 130px;">操作</th> {# Adjust width #}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr>
+                        <td><a href="{{ url_for('order_detail', order_id=order.id) }}">{{ order.order_number }}</a></td>
+                        <td title="{{ order.created_at }}">{{ order.created_at.strftime('%m-%d %H:%M') if order.created_at else 'N/A' }}</td>
+                        <td>
+                            {% if order.member %}
+                            <i class="bi bi-person-check-fill text-info" title="会员"></i> {{ order.member.name | truncate(10) }}
+                            {% else %}
+                            <span class="text-muted">匿名</span>
+                            {% endif %}
+                        </td>
+                        <td>¥{{ "%.2f"|format(order.final_amount) }}</td>
+                        <td>
+                            {% if order.status == 'pending' %}<span class="badge text-bg-warning">待处理</span>
+                            {% elif order.status == 'cooking' %}<span class="badge text-bg-primary">制作中</span>
+                            {% elif order.status == 'completed' %}<span class="badge text-bg-success">已完成</span>
+                            {% elif order.status == 'cancelled' %}<span class="badge text-bg-danger">已取消</span>
+                            {% else %}<span class="badge text-bg-secondary">{{ order.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if order.payment_method == 'cash' %}<i class="bi bi-cash" title="现金"></i>
+                            {% elif order.payment_method == 'wechat' %}<i class="bi bi-wechat text-success" title="微信"></i>
+                            {% elif order.payment_method == 'alipay' %}<i class="bi bi-alipay text-primary" title="支付宝"></i>
+                            {% else %}<i class="bi bi-credit-card" title="其他"></i>
+                            {% endif %}
+                        </td>
+                         <td>
+                            {% if order.source == 'pos' %}<span class="badge bg-light text-dark border" title="店内POS">店内</span>
+                            {% elif order.source == 'meituan' %}<span class="badge bg-warning text-dark" title="美团">美团</span>
+                            {% elif order.source == 'own_app' %}<span class="badge bg-info" title="自有APP">APP</span>
+                            {% elif order.source == 'qr_code' %}<span class="badge bg-success" title="扫码点餐">扫码</span>
+                            {% else %}<span class="badge bg-secondary" title="{{order.source}}">其他</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm" role="group">
+                                <a href="{{ url_for('order_detail', order_id=order.id) }}" class="btn btn-outline-primary" title="查看详情">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                {# 删除按钮只对 owner 可见 #}
+                                {% if current_user.role == 'owner' %}
+                                <button type="button" class="btn btn-outline-danger delete-order-btn" title="删除订单"
+                                        data-bs-toggle="modal" data-bs-target="#deleteOrderModal"
+                                        data-id="{{ order.id }}"
+                                        data-number="{{ order.order_number }}">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="8" class="text-center text-muted">暂无订单数据</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+         {% if pagination and pagination.pages > 1 %}
+        <nav aria-label="Page navigation" class="mt-3">
+          <ul class="pagination justify-content-center flex-wrap"> {# Added flex-wrap #}
+            <li class="page-item {% if not pagination.has_prev %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for(request.endpoint, page=pagination.prev_num, search=search_term) if pagination.has_prev else '#' }}">&laquo;</a>
+            </li>
+            {% for page_num in pagination.iter_pages(left_edge=1, right_edge=1, left_current=1, right_current=2) %} {# Condensed pagination #}
+              {% if page_num %}
+                <li class="page-item {% if page_num == pagination.page %}active{% endif %}">
+                  <a class="page-link" href="{{ url_for(request.endpoint, page=page_num, search=search_term) }}">{{ page_num }}</a>
+                </li>
+              {% elif page_num is none %}
+                 <li class="page-item disabled"><span class="page-link">...</span></li>
+              {% endif %}
+            {% endfor %}
+            <li class="page-item {% if not pagination.has_next %}disabled{% endif %}">
+              <a class="page-link" href="{{ url_for(request.endpoint, page=pagination.next_num, search=search_term) if pagination.has_next else '#' }}">&raquo;</a>
+            </li>
+          </ul>
+        </nav>
+        <p class="text-center text-muted small">
+            共 {{ pagination.total }} 条记录，第 {{ pagination.page }} / {{ pagination.pages }} 页
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+{#
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header"><h5 class="mb-0">状态分布</h5></div>
+            <div class="card-body"><canvas id="orderStatusChart" height="150"></canvas></div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+         <div class="card">
+            <div class="card-header"><h5 class="mb-0">支付方式</h5></div>
+            <div class="card-body"><canvas id="paymentMethodChart" height="150"></canvas></div>
+        </div>
+    </div>
+</div>
+#}
+
+<div class="modal fade" id="deleteOrderModal" tabindex="-1" aria-labelledby="deleteOrderModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteOrderModalLabel"><i class="bi bi-exclamation-triangle-fill"></i> 确认删除订单</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>您确定要永久删除订单 <strong id="delete-order-number" class="text-danger"></strong> 吗？</p>
+                <p class="text-muted small">此操作无法撤销，将删除所有关联的订单项。</p>
+                <form id="deleteOrderForm" action="{{ url_for('delete_order') }}" method="post">
+                    <input type="hidden" id="delete-order-id" name="order_id">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-danger" id="confirmDeleteOrderBtn">
+                    <i class="bi bi-trash"></i> 确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }} {# Include base scripts if any #}
+{# <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> #} {# Uncomment if using charts #}
+<script>
+    $(document).ready(function() {
+        // 删除订单按钮点击事件
+        $('.delete-order-btn').click(function() {
+            const id = $(this).data('id');
+            const orderNumber = $(this).data('number');
+            $('#delete-order-id').val(id);
+            $('#delete-order-number').text(orderNumber);
+        });
+
+        // 确认删除订单
+        $('#confirmDeleteOrderBtn').click(function() {
+            $('#deleteOrderForm').submit();
+        });
+
+        // Optional: Client-side search (if not using GET parameter search)
+        /*
+        $("#searchOrderInput").on("keyup", function() {
+            var value = $(this).val().toLowerCase();
+            $("table tbody tr").filter(function() {
+                $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+            });
+        });
+        */
+
+        // Optional: Chart initialization (Uncomment Chart.js include above if using)
+        /*
+        var statusCtx = document.getElementById('orderStatusChart')?.getContext('2d');
+        if (statusCtx) {
+            var statusChart = new Chart(statusCtx, { type: 'pie', data: {...} });
+        }
+        var paymentCtx = document.getElementById('paymentMethodChart')?.getContext('2d');
+         if (paymentCtx) {
+            var paymentChart = new Chart(paymentCtx, { type: 'doughnut', data: {...} });
+        }
+        */
+    });
+</script>
+{% endblock %}

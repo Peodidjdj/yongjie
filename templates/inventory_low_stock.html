@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>库存预警 - 永杰饭庄管理系统</title>
+    <!-- 修正CDN链接 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">永杰饭庄管理系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">仪表盘</a>
+                    </li>
+
+                    <!-- 销售管理: 店主、厨师、服务员可见 -->
+                    {% if current_user.role in ['owner', 'chef', 'waiter'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            销售管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <!-- 菜单管理: 店主、厨师可见 -->
+                            {% if current_user.role in ['owner', 'chef'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('menu_list') }}">菜单管理</a></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{{ url_for('order_list') }}">订单管理</a></li>
+                            <!-- 创建订单: 店主、服务员可见 -->
+                            {% if current_user.role in ['owner', 'waiter'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('order_create') }}">创建订单</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 会员管理: 店主、服务员可见 -->
+                    {% if current_user.role in ['owner', 'waiter'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            会员管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('member_list') }}">会员列表</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('member_add') }}">添加会员</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 库存管理: 店主、库管可见 -->
+                    {% if current_user.role in ['owner', 'storage'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle active" href="#" role="button" data-bs-toggle="dropdown">
+                            库存管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('inventory_list') }}">库存列表</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('inventory_add') }}">添加原料</a></li>
+                            <li><a class="dropdown-item active" href="{{ url_for('check_stock') }}">库存预警</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 特色业务: 所有人可见 -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            特色业务
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('heritage_dishes') }}">传承菜</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('diy_drinks') }}">DIY饮品</a></li>
+                            <!-- 初始化DIY数据: 店主和厨师可见 -->
+                            {% if current_user.role in ['owner', 'chef'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('init_diy_data') }}">初始化DIY数据</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            {{ current_user.username }} ({{ current_user.role|capitalize }})
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#">个人资料</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">退出登录</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('customer_index') }}" target="_blank">顾客视图</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>库存预警</h1>
+            <div>
+                <a href="{{ url_for('inventory_list') }}" class="btn btn-outline-secondary me-2">
+                    <i class="bi bi-arrow-left"></i> 返回库存列表
+                </a>
+                {% if current_user.role in ['owner', 'storage'] %}
+                <a href="{{ url_for('inventory_add') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> 添加原料
+                </a>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="alert alert-warning">
+            <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>库存预警说明</h5>
+            <p class="mb-0">以下原料库存不足，已低于或等于最低库存限制，请及时补充。</p>
+            {% if current_user.role == 'chef' %}
+            <p class="mb-1 mt-2">注意：库存不足可能会导致部分菜品无法制作，请与库管或店主沟通，尽快补充。</p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0"><i class="bi bi-exclamation-circle me-2"></i>库存不足原料列表</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if low_stock %}
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>原料名称</th>
+                                <th>单位</th>
+                                <th>当前库存</th>
+                                <th>最低库存</th>
+                                <th>状态</th>
+                                <th>单价</th>
+                                {% if current_user.role in ['owner', 'storage'] %}
+                                <th>操作</th>
+                                {% endif %}
+                                {% if current_user.role == 'chef' %}
+                                <th>影响菜品</th>
+                                {% endif %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in low_stock %}
+                            <tr>
+                                <td>{{ item.id }}</td>
+                                <td>{{ item.name }}</td>
+                                <td>{{ item.unit }}</td>
+                                <td class="fw-bold text-danger">{{ item.quantity }}</td>
+                                <td>{{ item.min_quantity }}</td>
+                                <td>
+                                    {% if item.quantity == 0 %}
+                                    <span class="badge bg-danger">已耗尽</span>
+                                    {% else %}
+                                    <span class="badge bg-warning text-dark">库存不足</span>
+                                    {% endif %}
+                                </td>
+                                <td>¥{{ item.price_per_unit }}</td>
+                                {% if current_user.role in ['owner', 'storage'] %}
+                                <td>
+                                    <button class="btn btn-sm btn-primary update-stock-btn"
+                                            data-bs-toggle="modal" data-bs-target="#updateStockModal"
+                                            data-id="{{ item.id }}"
+                                            data-name="{{ item.name }}"
+                                            data-quantity="{{ item.quantity }}"
+                                            data-unit="{{ item.unit }}">
+                                        <i class="bi bi-plus-circle"></i> 补充库存
+                                    </button>
+                                </td>
+                                {% endif %}
+                                {% if current_user.role == 'chef' %}
+                                <td>
+                                    <button class="btn btn-sm btn-info affected-dishes-btn"
+                                            data-bs-toggle="modal" data-bs-target="#affectedDishesModal"
+                                            data-id="{{ item.id }}"
+                                            data-name="{{ item.name }}">
+                                        <i class="bi bi-list-ul"></i> 查看菜品
+                                    </button>
+                                </td>
+                                {% endif %}
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                    <h4 class="mt-3">所有原料库存充足</h4>
+                    <p class="text-muted">当前没有需要补充的原料</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if low_stock and current_user.role in ['owner', 'storage'] %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">快速操作</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#bulkUpdateModal">
+                                <i class="bi bi-cart-plus"></i> 批量补充库存
+                            </button>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="d-grid">
+                            <button class="btn btn-outline-success" id="printListBtn">
+                                <i class="bi bi-printer"></i> 打印补货清单
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 订购建议 - 仅对店主显示 -->
+                {% if current_user.role == 'owner' %}
+                <div class="mt-4">
+                    <h6>订购建议</h6>
+                    <ul class="list-group">
+                        {% for item in low_stock %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            {{ item.name }}
+                            <span class="badge bg-primary rounded-pill">建议订购: {{ (item.min_quantity - item.quantity) * 3 if item.min_quantity > item.quantity else item.min_quantity * 2 }} {{ item.unit }}</span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- 供应商联系信息 - 仅对店主和库管显示 -->
+        {% if low_stock and current_user.role in ['owner', 'storage'] %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">供应商联系信息</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>供应商名称</th>
+                                <th>联系人</th>
+                                <th>联系电话</th>
+                                <th>可供应原料</th>
+                                <th>备注</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>鲜味食材有限公司</td>
+                                <td>张经理</td>
+                                <td>13812345678</td>
+                                <td>肉类、蔬菜</td>
+                                <td>批发价优惠，3天内可送货</td>
+                            </tr>
+                            <tr>
+                                <td>永兴调料批发</td>
+                                <td>李老板</td>
+                                <td>13987654321</td>
+                                <td>调味料、干货</td>
+                                <td>大量订购有折扣</td>
+                            </tr>
+                            <tr>
+                                <td>鑫源农产品</td>
+                                <td>王先生</td>
+                                <td>13500123456</td>
+                                <td>新鲜蔬果、豆制品</td>
+                                <td>每日配送，品质保障</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- 更新库存模态框 - 店主和库管可见 -->
+    {% if current_user.role in ['owner', 'storage'] %}
+    <div class="modal fade" id="updateStockModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">补充库存</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="updateStockForm" method="post" action="{{ url_for('update_inventory') }}">
+                        <input type="hidden" id="ingredient-id" name="ingredient_id">
+                        <div class="mb-3">
+                            <label for="ingredient-name" class="form-label">原料名称</label>
+                            <input type="text" class="form-control" id="ingredient-name" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="current-quantity" class="form-label">当前库存</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="current-quantity" readonly>
+                                <span class="input-group-text" id="unit-display"></span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="add-quantity" class="form-label">补充数量</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="add-quantity" step="0.01" min="0">
+                                <span class="input-group-text unit-display"></span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="new-quantity" class="form-label">补充后库存</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="new-quantity" name="quantity" readonly>
+                                <span class="input-group-text unit-display"></span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="operation-note" class="form-label">操作备注</label>
+                            <textarea class="form-control" id="operation-note" name="operation_note" rows="2"
+                                    placeholder="请简要说明库存补充信息（选填）"></textarea>
+                        </div>
+                        <!-- 添加供应商选择 -->
+                        <div class="mb-3">
+                            <label for="supplier" class="form-label">供应商</label>
+                            <select class="form-select" id="supplier" name="supplier">
+                                <option value="">-- 选择供应商 --</option>
+                                <option value="1">鲜味食材有限公司</option>
+                                <option value="2">永兴调料批发</option>
+                                <option value="3">鑫源农产品</option>
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveStockBtn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 批量更新模态框 - 店主和库管可见 -->
+{% if current_user.role in ['owner', 'storage'] %}
+<div class="modal fade" id="bulkUpdateModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">批量补充库存</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- 将 action 从 bulk_update_inventory 改为 update_inventory -->
+                <form id="bulkUpdateForm" method="post" action="{{ url_for('update_inventory') }}">
+                    <div class="mb-3">
+                        <label for="bulk-supplier" class="form-label">选择供应商</label>
+                        <select class="form-select" id="bulk-supplier" name="supplier">
+                            <option value="">-- 选择供应商 --</option>
+                            <option value="1">鲜味食材有限公司</option>
+                            <option value="2">永兴调料批发</option>
+                            <option value="3">鑫源农产品</option>
+                        </select>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>选择</th>
+                                    <th>原料名称</th>
+                                    <th>当前库存</th>
+                                    <th>最低库存</th>
+                                    <th>补充数量</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in low_stock %}
+                                <tr>
+                                    <td>
+                                        <div class="form-check">
+                                            <input class="form-check-input bulk-select" type="checkbox" checked
+                                                   id="select-{{ item.id }}" name="selected_items" value="{{ item.id }}">
+                                        </div>
+                                    </td>
+                                    <td>{{ item.name }}</td>
+                                    <td>{{ item.quantity }} {{ item.unit }}</td>
+                                    <td>{{ item.min_quantity }} {{ item.unit }}</td>
+                                    <td>
+                                        <div class="input-group">
+                                            <input type="number" class="form-control bulk-quantity"
+                                                   name="quantity_{{ item.id }}" id="quantity-{{ item.id }}"
+                                                   data-id="{{ item.id }}" step="0.01" min="0"
+                                                   value="{{ (item.min_quantity - item.quantity) * 2 if item.min_quantity > item.quantity else item.min_quantity }}">
+                                            <span class="input-group-text">{{ item.unit }}</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="mb-3">
+                        <label for="bulk-note" class="form-label">批量操作备注</label>
+                        <textarea class="form-control" id="bulk-note" name="bulk_note" rows="2"
+                                placeholder="请简要说明此次批量补充信息（选填）"></textarea>
+                    </div>
+                    <!-- 添加一个隐藏字段标记这是批量操作 -->
+                    <input type="hidden" name="is_bulk_update" value="1">
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="bulkSaveBtn">批量保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+    <!-- 影响菜品模态框 - 厨师可见 -->
+    {% if current_user.role == 'chef' %}
+    <div class="modal fade" id="affectedDishesModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">受影响菜品</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>原料: <span id="affected-ingredient-name" class="fw-bold"></span> 库存不足，以下菜品可能无法正常制作:</p>
+                    <ul class="list-group" id="affected-dishes-list">
+                        <!-- 动态加载受影响的菜品 -->
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div class="spinner-border spinner-border-sm" role="status">
+                                <span class="visually-hidden">加载中...</span>
+                            </div>
+                            正在加载...
+                        </li>
+                    </ul>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" id="notifyStaffBtn">通知库管</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <footer class="bg-light text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">永杰饭庄管理系统 &copy; 2025</p>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // 更新库存模态框
+            $('.update-stock-btn').click(function() {
+                const id = $(this).data('id');
+                const name = $(this).data('name');
+                const quantity = $(this).data('quantity');
+                const unit = $(this).data('unit');
+
+                $('#ingredient-id').val(id);
+                $('#ingredient-name').val(name);
+                $('#current-quantity').val(quantity);
+                $('#unit-display').text(unit);
+                $('.unit-display').text(unit);
+                $('#add-quantity').val('');
+                $('#new-quantity').val(quantity);
+                $('#operation-note').val('');
+            });
+
+            // 补充数量变更时计算新库存
+            $('#add-quantity').on('input', function() {
+                const currentQty = parseFloat($('#current-quantity').val()) || 0;
+                const addQty = parseFloat($(this).val()) || 0;
+                $('#new-quantity').val((currentQty + addQty).toFixed(2));
+
+                // 自动填写操作备注
+                if ($('#operation-note').val() === '') {
+                    $('#operation-note').val('紧急补充库存 +' + addQty + ' ' + $('#unit-display').text());
+                }
+            });
+
+            // 保存库存更新
+            $('#saveStockBtn').click(function() {
+                const addQty = parseFloat($('#add-quantity').val());
+
+                if (!addQty || addQty <= 0) {
+                    alert('请输入有效的补充数量');
+                    return;
+                }
+
+                $('#updateStockForm').submit();
+            });
+
+            // 批量保存库存更新
+            $('#bulkSaveBtn').click(function() {
+                let hasError = false;
+                let updateCount = 0;
+
+                // 检查是否选择了供应商
+                if (!$('#bulk-supplier').val()) {
+                    alert('请选择供应商');
+                    return;
+                }
+
+                // 检查是否至少有一个选中的原料
+                if ($('.bulk-select:checked').length === 0) {
+                    alert('请至少选择一个原料进行补充');
+                    return;
+                }
+
+                // 检查所有选中的原料是否都有有效数量
+                $('.bulk-select:checked').each(function() {
+                    const id = $(this).val();
+                    const quantity = parseFloat($('#quantity-' + id).val());
+
+                    if (!quantity || quantity <= 0) {
+                        hasError = true;
+                        return false; // 跳出循环
+                    }
+
+                    updateCount++;
+                });
+
+                if (hasError) {
+                    alert('请为所有选中的原料输入有效的补充数量');
+                    return;
+                }
+
+                if (updateCount === 0) {
+                    alert('请至少输入一个有效的补充数量');
+                    return;
+                }
+
+                // 提交表单
+                $('#bulkUpdateForm').submit();
+            });
+
+            // 打印补货清单
+            $('#printListBtn').click(function() {
+                window.print();
+            });
+
+            // 查看影响的菜品
+           $('.affected-dishes-btn').click(function() {
+    const id = $(this).data('id');
+    const name = $(this).data('name');
+
+    $('#affected-ingredient-name').text(name);
+
+    // 模拟加载受影响的菜品（实际应该从后端获取数据）
+    setTimeout(function() {
+        let dishesList = '';
+
+        if (name === '猪肉') {
+            dishesList = `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    回锅肉
+                    <span class="badge bg-danger">无法制作</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    糖醋里脊
+                    <span class="badge bg-danger">无法制作</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    水煮肉片
+                    <span class="badge bg-danger">无法制作</span>
+                </li>
+            `;
+        } else if (name === '青椒') {
+            dishesList = `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    青椒炒肉
+                    <span class="badge bg-danger">无法制作</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    鱼香肉丝
+                    <span class="badge bg-warning text-dark">可替代</span>
+                </li>
+            `;
+        } else if (name === '大米') {
+            dishesList = `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    米饭
+                    <span class="badge bg-danger">无法提供</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    蛋炒饭
+                    <span class="badge bg-danger">无法制作</span>
+                </li>
+            `;
+        } else if (name === '鸡蛋') {
+            dishesList = `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    西红柿炒鸡蛋
+                    <span class="badge bg-danger">无法制作</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    蛋炒饭
+                    <span class="badge bg-danger">无法制作</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    鸡蛋汤
+                    <span class="badge bg-danger">无法制作</span>
+                </li>
+            `;
+        } else if (name === '白糖') {
+            dishesList = `
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    DIY饮品
+                    <span class="badge bg-warning text-dark">甜度受限</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center">
+                    糖醋里脊
+                    <span class="badge bg-warning text-dark">口味受影响</span>
+                </li>
+            `;
+        } else {
+            dishesList = `
+                <li class="list-group-item">
+                    暂无数据，请联系系统管理员更新菜品与原料的关联信息。
+                </li>
+            `;
+        }
+
+        $('#affected-dishes-list').html(dishesList);
+    }, 500);
+});
+// 通知库管按钮
+$('#notifyStaffBtn').click(function() {
+    const ingredientName = $('#affected-ingredient-name').text();
+
+    // 模拟发送通知
+    $(this).prop('disabled', true).html('<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 发送中...');
+
+    setTimeout(function() {
+        alert(`已成功通知库管："原料 ${ingredientName} 库存不足，影响菜品制作，请尽快补充！"`);
+        $('#notifyStaffBtn').prop('disabled', false).html('通知库管');
+        $('#affectedDishesModal').modal('hide');
+    }, 1000);
+});
+
+// 全选/取消全选批量更新中的原料
+$('#select-all').change(function() {
+    $('.bulk-select').prop('checked', $(this).prop('checked'));
+});
+
+// 当个别复选框状态变化时，检查"全选"状态
+$('.bulk-select').change(function() {
+    if ($('.bulk-select:checked').length === $('.bulk-select').length) {
+        $('#select-all').prop('checked', true);
+    } else {
+        $('#select-all').prop('checked', false);
+    }
+});
+
+// 自动计算推荐补充数量
+$('#bulk-supplier').change(function() {
+    const supplier = $(this).val();
+
+    // 根据不同供应商调整推荐订购量
+    if (supplier === '1') { // 鲜味食材有限公司
+        $('.bulk-quantity').each(function() {
+            const id = $(this).data('id');
+            const row = $(this).closest('tr');
+            const currentQty = parseFloat(row.find('td:eq(2)').text());
+            const minQty = parseFloat(row.find('td:eq(3)').text());
+
+            // 设置为最低库存的3倍
+            $(this).val((minQty * 3).toFixed(2));
+        });
+    } else if (supplier === '2') { // 永兴调料批发
+        $('.bulk-quantity').each(function() {
+            const id = $(this).data('id');
+            const row = $(this).closest('tr');
+            const currentQty = parseFloat(row.find('td:eq(2)').text());
+            const minQty = parseFloat(row.find('td:eq(3)').text());
+
+            // 设置为最低库存的5倍（调料通常可以储存更久）
+            $(this).val((minQty * 5).toFixed(2));
+        });
+    } else {
+        // 默认设置为最低库存的2倍
+        $('.bulk-quantity').each(function() {
+            const id = $(this).data('id');
+            const row = $(this).closest('tr');
+            const currentQty = parseFloat(row.find('td:eq(2)').text());
+            const minQty = parseFloat(row.find('td:eq(3)').text());
+
+            $(this).val((minQty * 2).toFixed(2));
+        });
+    }
+});
+
+// 自动填写批量操作备注
+$('#bulk-supplier').change(function() {
+    const supplier = $(this).val();
+    let supplierName = '';
+
+    if (supplier === '1') {
+        supplierName = '鲜味食材有限公司';
+    } else if (supplier === '2') {
+        supplierName = '永兴调料批发';
+    } else if (supplier === '3') {
+        supplierName = '鑫源农产品';
+    }
+
+    if (supplierName && $('#bulk-note').val() === '') {
+        $('#bulk-note').val(`批量补充库存，供应商：${supplierName}，补充原因：库存预警`);
+    }
+});
+
+// 过期日期提醒
+// 检查是否有即将过期的原料
+const expiringItems = []; // 假设这是从后端获取的数据
+
+if (expiringItems && expiringItems.length > 0) {
+    let message = '以下原料即将过期，请注意使用：\n';
+
+    expiringItems.forEach(item => {
+        message += `- ${item.name}：${item.expiry_date}\n`;
+    });
+
+    setTimeout(function() {
+        alert(message);
+    }, 1000);
+}
+
+// 动态更新最低库存设置
+$('.update-min-stock').click(function() {
+    const id = $(this).data('id');
+    const name = $(this).data('name');
+    const minStock = $(this).data('min-stock');
+
+    $('#min-stock-id').val(id);
+    $('#min-stock-name').val(name);
+    $('#min-stock-value').val(minStock);
+});
+
+// 保存最低库存设置
+$('#saveMinStockBtn').click(function() {
+    const minStock = parseFloat($('#min-stock-value').val());
+
+    if (!minStock || minStock < 0) {
+        alert('请输入有效的最低库存值');
+        return;
+    }
+
+    $('#minStockForm').submit();
+});
+
+// 初始化提示工具
+var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+    return new bootstrap.Tooltip(tooltipTriggerEl)
+});
+
+// 根据角色调整界面
+const userRole = '{{ current_user.role }}';
+
+if (userRole === 'chef') {
+    // 对于厨师，突出显示影响菜品制作的原料
+    $('.affected-dishes-btn').each(function() {
+        $(this).addClass('btn-danger').removeClass('btn-info');
+        $(this).find('i').removeClass('bi-list-ul').addClass('bi-exclamation-triangle');
+    });
+}
+
+// 供应商信息扩展
+$('.supplier-info-btn').click(function() {
+    const supplier = $(this).data('supplier');
+    const name = $(this).data('name');
+
+    $('#supplier-detail-name').text(name);
+
+    // 根据供应商ID加载详细信息
+    let supplierHtml = '';
+
+    if (supplier === '1') {
+        supplierHtml = `
+            <div class="mb-3">
+                <strong>联系人：</strong> 张经理
+            </div>
+            <div class="mb-3">
+                <strong>联系电话：</strong> 13812345678
+            </div>
+            <div class="mb-3">
+                <strong>地址：</strong> 城南食品批发市场A12号
+            </div>
+            <div class="mb-3">
+                <strong>主营产品：</strong> 肉类、蔬菜
+            </div>
+            <div class="mb-3">
+                <strong>结算方式：</strong> 月结
+            </div>
+            <div class="mb-3">
+                <strong>备注：</strong> 批发价优惠，3天内可送货
+            </div>
+        `;
+    } else if (supplier === '2') {
+        supplierHtml = `
+            <div class="mb-3">
+                <strong>联系人：</strong> 李老板
+            </div>
+            <div class="mb-3">
+                <strong>联系电话：</strong> 13987654321
+            </div>
+            <div class="mb-3">
+                <strong>地址：</strong> 城北调料市场25号
+            </div>
+            <div class="mb-3">
+                <strong>主营产品：</strong> 调味料、干货
+            </div>
+            <div class="mb-3">
+                <strong>结算方式：</strong> 现结
+            </div>
+            <div class="mb-3">
+                <strong>备注：</strong> 大量订购有折扣
+            </div>
+        `;
+    } else {
+        supplierHtml = `
+            <div class="mb-3">
+                <strong>联系人：</strong> 王先生
+            </div>
+            <div class="mb-3">
+                <strong>联系电话：</strong> 13500123456
+            </div>
+            <div class="mb-3">
+                <strong>地址：</strong> 郊区农产品批发中心
+            </div>
+            <div class="mb-3">
+                <strong>主营产品：</strong> 新鲜蔬果、豆制品
+            </div>
+            <div class="mb-3">
+                <strong>结算方式：</strong> 周结
+            </div>
+            <div class="mb-3">
+                <strong>备注：</strong> 每日配送，品质保障
+            </div>
+        `;
+    }
+
+    $('#supplier-details').html(supplierHtml);
+});
+
+// 订购历史记录
+$('.order-history-btn').click(function() {
+    const id = $(this).data('id');
+    const name = $(this).data('name');
+
+    $('#history-ingredient-name').text(name);
+
+    // 模拟加载历史记录
+    $('#history-records').html('<div class="text-center py-3"><div class="spinner-border" role="status"><span class="visually-hidden">加载中...</span></div></div>');
+
+    setTimeout(function() {
+        let historyHtml = `
+            <div class="table-responsive">
+                <table class="table table-sm table-striped">
+                    <thead>
+                        <tr>
+                            <th>日期</th>
+                            <th>数量</th>
+                            <th>操作人</th>
+                            <th>供应商</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>2024-05-10</td>
+                            <td>+10.00</td>
+                            <td>李库管</td>
+                            <td>鲜味食材有限公司</td>
+                            <td>常规进货</td>
+                        </tr>
+                        <tr>
+                            <td>2024-05-05</td>
+                            <td>+5.00</td>
+                            <td>王经理</td>
+                            <td>鑫源农产品</td>
+                            <td>紧急补充</td>
+                        </tr>
+                        <tr>
+                            <td>2024-05-01</td>
+                            <td>+15.00</td>
+                            <td>李库管</td>
+                            <td>鲜味食材有限公司</td>
+                            <td>月初进货</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        `;
+
+        $('#history-records').html(historyHtml);
+    }, 800);
+});
+
+// 顾客角色特有功能：查看可制作菜品
+$('.view-available-dishes').click(function() {
+    // 模拟加载可制作菜品列表
+    $('#available-dishes-container').html('<div class="text-center py-3"><div class="spinner-border" role="status"><span class="visually-hidden">加载中...</span></div></div>');
+
+    setTimeout(function() {
+        const availableDishes = `
+            <div class="row">
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <img src="/static/images/dishes/kung_pao_chicken.jpg" class="card-img-top" alt="宫保鸡丁">
+                        <div class="card-body">
+                            <h5 class="card-title">宫保鸡丁</h5>
+                            <p class="card-text text-success"><i class="bi bi-check-circle"></i> 可制作</p>
+                            <p class="card-text">传统川菜，口味麻辣鲜香。</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <img src="/static/images/dishes/sweet_sour_fish.jpg" class="card-img-top" alt="糖醋鱼">
+                        <div class="card-body">
+                            <h5 class="card-title">糖醋鱼</h5>
+                            <p class="card-text text-success"><i class="bi bi-check-circle"></i> 可制作</p>
+                            <p class="card-text">色泽金黄，酸甜可口。</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 mb-3">
+                    <div class="card h-100">
+                        <img src="/static/images/dishes/tomato_egg.jpg" class="card-img-top" alt="西红柿炒鸡蛋">
+                        <div class="card-body">
+                            <h5 class="card-title">西红柿炒鸡蛋</h5>
+                            <p class="card-text text-danger"><i class="bi bi-x-circle"></i> 缺少原料：鸡蛋</p>
+                            <p class="card-text">家常菜，酸甜可口。</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('#available-dishes-container').html(availableDishes);
+    }, 1000);
+});
+
+// 权限提醒
+if (userRole === 'chef' && $('.affected-dishes-btn').length > 0) {
+    setTimeout(function() {
+        const modalHtml = `
+            <div class="modal fade" id="chefWarningModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill"></i> 厨师提醒</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p>有 <strong>${$('.affected-dishes-btn').length}</strong> 种原料库存不足，可能会影响菜品制作。</p>
+                            <p>请查看详情并考虑通知库管及时补充。</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                            <button type="button" class="btn btn-primary" data-bs-dismiss="modal" onclick="$('.affected-dishes-btn').first().click()">查看详情</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        $('body').append(modalHtml);
+
+        new bootstrap.Modal(document.getElementById('chefWarningModal')).show();
+    }, 1500);
+}
+
+// 批量补货快捷功能
+$('#quickRefillBtn').click(function() {
+    // 检查是否有低库存
+    if ($('.bulk-select').length === 0) {
+        alert('没有需要补充的原料');
+        return;
+    }
+
+    // 填充快速补货表单
+    $('#bulk-supplier').val('1'); // 默认选择第一个供应商
+    $('#bulk-supplier').trigger('change'); // 触发计算事件
+
+    // 打开模态框
+    new bootstrap.Modal(document.getElementById('bulkUpdateModal')).show();
+});
+
+// 顾客角色的DIY原料状态
+if (userRole === 'customer') {
+    // 更新DIY可用原料状态
+    $('.diy-ingredient-status').each(function() {
+        const ingredientName = $(this).data('name');
+        const isLow = $(this).data('is-low') === 'true';
+
+        if (isLow) {
+            $(this).html('<i class="bi bi-x-circle text-danger"></i> 暂无库存');
+            $(this).closest('.diy-ingredient-card').addClass('disabled opacity-50');
+        } else {
+            $(this).html('<i class="bi bi-check-circle text-success"></i> 可选用');
+        }
+    });
+}
+
+        });
+    </script>
+
+
+

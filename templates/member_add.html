@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>添加会员 - 永杰饭庄管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">永杰饭庄管理系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">仪表盘</a>
+                    </li>
+
+                    <!-- 销售管理：店主、厨师、服务员可见 -->
+                    {% if current_user.role in ['owner', 'chef', 'waiter'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            销售管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <!-- 菜单管理：店主和厨师可见 -->
+                            {% if current_user.role in ['owner', 'chef'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('menu_list') }}">菜品管理</a></li>
+                            {% endif %}
+
+                            <li><a class="dropdown-item" href="{{ url_for('order_list') }}">订单管理</a></li>
+
+                            <!-- 创建订单：店主和服务员可见 -->
+                            {% if current_user.role in ['owner', 'waiter'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('order_create') }}">创建订单</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 会员管理：店主和服务员可见 -->
+                    {% if current_user.role in ['owner', 'waiter'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle active" href="#" role="button" data-bs-toggle="dropdown">
+                            会员管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('member_list') }}">会员列表</a></li>
+                            <li><a class="dropdown-item active" href="{{ url_for('member_add') }}">添加会员</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 库存管理：店主和库管可见 -->
+                    {% if current_user.role in ['owner', 'storage'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            库存管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('inventory_list') }}">库存列表</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('inventory_add') }}">添加原料</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('check_stock') }}">库存预警</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 特色业务：所有角色可见 -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            特色业务
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('heritage_dishes') }}">传承菜</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('diy_drinks') }}">DIY饮品</a></li>
+                            <!-- 初始化DIY数据：店主和厨师可见 -->
+                            {% if current_user.role in ['owner', 'chef'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('init_diy_data') }}">初始化DIY数据</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            {{ current_user.username }} ({{ current_user.role|capitalize }})
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#">个人资料</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">退出登录</a></li>
+                        </ul>
+                    </li>
+                    <!-- 顾客视图：所有人可见 -->
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('customer_index') }}" target="_blank">顾客视图</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>添加会员</h1>
+            <a href="{{ url_for('member_list') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left"></i> 返回会员列表
+            </a>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <form method="post">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">姓名</label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label for="phone" class="form-label">手机号</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" pattern="[0-9]{11}" placeholder="请输入11位手机号" required>
+                            <div class="form-text">请输入有效的11位手机号码，将用于发送通知和登录验证。</div>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="email" class="form-label">邮箱</label>
+                        <input type="email" class="form-control" id="email" name="email">
+                        <div class="form-text">可选，用于接收电子凭证和会员促销。</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="member_type" class="form-label">会员类型</label>
+                        <select class="form-select" id="member_type" name="member_type">
+                            <option value="student">学生</option>
+                            <option value="patient">医院患者家属</option>
+                            <option value="elderly">中老年</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="send_welcome" name="send_welcome" checked>
+                        <label class="form-check-label" for="send_welcome">
+                            发送欢迎短信
+                        </label>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="subscribe_marketing" name="subscribe_marketing" checked>
+                        <label class="form-check-label" for="subscribe_marketing">
+                            订阅促销活动通知
+                        </label>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-person-plus"></i> 添加会员
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-light text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">永杰饭庄管理系统 &copy; 2025</p>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+{# Assuming this page is part of the admin workflow and should look consistent #}
+{% extends 'base_admin.html' %}
+
+{% block title %}DIY饮品 - {{ super() }}{% endblock %}
+
+{% block head_extra %}
+<style>
+    .form-check-label { cursor: pointer; }
+    .list-group-item span:last-child { font-weight: bold; }
+    .sticky-top { top: 70px; /* Adjust based on navbar height */ }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="bi bi-cup-straw"></i> DIY饮品</h1>
+    <div>
+        <button type="button" class="btn btn-outline-secondary me-2" id="resetBtn"><i class="bi bi-arrow-counterclockwise"></i> 重置选择</button>
+        {# Compatibility check is useful before adding #}
+        {# <button type="button" class="btn btn-info" id="checkCompatibilityBtn"><i class="bi bi-check2-circle"></i> 检查兼容</button> #}
+         <a href="{{ url_for('order_create') }}" class="btn btn-secondary"><i class="bi bi-arrow-left"></i> 返回订单页</a>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-light border">
+            <p class="mb-0">请选择基础饮料、甜度和您喜欢的配料，然后点击“加入订单”添加到当前正在创建的订单中。</p>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        {# Form for selection, doesn't need to be submitted traditionally #}
+        <form id="diyDrinkForm">
+            {# Base Options #}
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header"><h5 class="mb-0">1. 选择基础饮料 (必选)</h5></div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for base in bases %}
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input base-option" type="radio" name="base" id="base-{{ base.id }}" value="{{ base.id }}" data-price="{{ base.price }}" data-name="{{ base.name }}">
+                                <label class="form-check-label w-100" for="base-{{ base.id }}">
+                                    <div class="d-flex justify-content-between">
+                                        <span>{{ base.name }}</span>
+                                        <span class="text-primary fw-bold">¥{{ "%.2f"|format(base.price) }}</span>
+                                    </div>
+                                    {% if base.description %}<small class="text-muted d-block">{{ base.description }}</small>{% endif %}
+                                </label>
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">暂无基础饮料选项</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            {# Sweetener Options #}
+            <div class="card mb-4 shadow-sm">
+                 <div class="card-header"><h5 class="mb-0">2. 选择甜度 (必选)</h5></div>
+                 <div class="card-body">
+                     <div class="row">
+                        {% for sweetener in sweeteners %}
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input sweetener-option" type="radio" name="sweetener" id="sweetener-{{ sweetener.id }}" value="{{ sweetener.id }}" data-price="{{ sweetener.price }}" data-name="{{ sweetener.name }}">
+                                <label class="form-check-label w-100" for="sweetener-{{ sweetener.id }}">
+                                     <div class="d-flex justify-content-between">
+                                        <span>{{ sweetener.name }}</span>
+                                        <span class="text-primary fw-bold">¥{{ "%.2f"|format(sweetener.price) }}</span>
+                                    </div>
+                                    {% if sweetener.description %}<small class="text-muted d-block">{{ sweetener.description }}</small>{% endif %}
+                                </label>
+                            </div>
+                        </div>
+                        {% else %}
+                         <p class="text-muted">暂无甜度选项</p>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            {# Topping Options #}
+            <div class="card mb-4 shadow-sm">
+                 <div class="card-header"><h5 class="mb-0">3. 选择配料 (可选)</h5></div>
+                 <div class="card-body">
+                    <div class="row">
+                        {% for topping in toppings %}
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input topping-option" type="checkbox" name="toppings" id="topping-{{ topping.id }}" value="{{ topping.id }}" data-price="{{ topping.price }}" data-name="{{ topping.name }}">
+                                <label class="form-check-label w-100" for="topping-{{ topping.id }}">
+                                     <div class="d-flex justify-content-between">
+                                        <span>{{ topping.name }}</span>
+                                        <span class="text-primary fw-bold">¥{{ "%.2f"|format(topping.price) }}</span>
+                                    </div>
+                                    {% if topping.description %}<small class="text-muted d-block">{{ topping.description }}</small>{% endif %}
+                                </label>
+                            </div>
+                        </div>
+                        {% else %}
+                        <p class="text-muted">暂无配料选项</p>
+                        {% endfor %}
+                    </div>
+                 </div>
+            </div>
+        </form>
+    </div>
+
+    {# Summary and Action Column #}
+    <div class="col-md-4">
+        <div class="card sticky-top mb-4 shadow-sm" style="top: 70px;"> {# Adjust top offset #}
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-clipboard-check"></i> 您的选择</h5>
+            </div>
+            <div class="card-body">
+                {# Compatibility Result Area #}
+                <div id="compatibilityResult" class="mb-3"></div>
+
+                <h6 class="mb-2">已选：</h6>
+                <ul class="list-group list-group-flush mb-3" id="selectedIngredients" style="max-height: 200px; overflow-y: auto;">
+                    <li class="list-group-item text-center text-muted small py-4">请选择配料</li>
+                </ul>
+
+                <div class="d-flex justify-content-between border-top pt-3 mb-3">
+                    <h6 class="mb-0">总价：</h6>
+                    <h5 class="mb-0 text-primary" id="totalPrice">¥0.00</h5>
+                </div>
+
+                {# Action Button - Enabled only for specific roles #}
+                {% if current_user.is_authenticated and current_user.role in ['owner', 'waiter'] %}
+                    <button type="button" class="btn btn-success w-100" id="addToOrderBtn" disabled>
+                        <i class="bi bi-check-lg"></i> 选好了，加入订单
+                    </button>
+                     <small class="text-muted d-block text-center mt-2">请先选择基础和甜度</small>
+                {% else %}
+                    <button type="button" class="btn btn-secondary w-100" disabled>加入订单 (需要服务员权限)</button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Optional: Recommendations Section (Unchanged) #}
+{# <div class="row mt-4"><div class="col-12"><div class="card"> ... </div></div></div> #}
+
+{% endblock %}
+
+
+{% block scripts %}
+{{ super() }} {# Include base scripts #}
+<script>
+$(document).ready(function() {
+    // Update selection summary and total price
+    function updateSelection() {
+        let html = '';
+        let total = 0;
+        let canAddToOrder = false;
+
+        // Base
+        const selectedBase = $('input.base-option:checked');
+        if (selectedBase.length > 0) {
+            const price = parseFloat(selectedBase.data('price')) || 0;
+            html += `<li class="list-group-item d-flex justify-content-between"><span><i class="bi bi-cup-hot text-muted me-2"></i>${selectedBase.data('name')}</span><span>¥${price.toFixed(2)}</span></li>`;
+            total += price;
+        }
+
+        // Sweetener
+        const selectedSweetener = $('input.sweetener-option:checked');
+        if (selectedSweetener.length > 0) {
+            const price = parseFloat(selectedSweetener.data('price')) || 0;
+            html += `<li class="list-group-item d-flex justify-content-between"><span><i class="bi bi-droplet text-muted me-2"></i>${selectedSweetener.data('name')}</span><span>¥${price.toFixed(2)}</span></li>`;
+            total += price;
+        }
+
+        // Toppings
+        const selectedToppings = $('input.topping-option:checked');
+        if (selectedToppings.length > 0) {
+             html += '<li class="list-group-item pt-1 pb-0"><small class="text-muted">配料:</small></li>';
+             selectedToppings.each(function() {
+                const price = parseFloat($(this).data('price')) || 0;
+                html += `<li class="list-group-item d-flex justify-content-between ps-4"><span>${$(this).data('name')}</span><span>¥${price.toFixed(2)}</span></li>`;
+                total += price;
+            });
+        }
+
+        // Update display
+        if (html) {
+            $('#selectedIngredients').html(html);
+        } else {
+            $('#selectedIngredients').html('<li class="list-group-item text-center text-muted small py-4">请选择配料</li>');
+        }
+        $('#totalPrice').text(`¥${total.toFixed(2)}`);
+
+        // Enable "Add to Order" only if base and sweetener are selected
+        canAddToOrder = (selectedBase.length > 0 && selectedSweetener.length > 0);
+        $('#addToOrderBtn').prop('disabled', !canAddToOrder);
+        if (canAddToOrder) {
+             $('#addToOrderBtn').next('small').hide();
+        } else {
+             $('#addToOrderBtn').next('small').show();
+        }
+
+        // Clear compatibility result on change
+        $('#compatibilityResult').html('');
+    }
+
+    // Reset selections
+    function resetSelections() {
+        $('#diyDrinkForm')[0].reset(); // Reset the form radios/checkboxes
+        updateSelection(); // Update the display
+    }
+
+    // --- Event Listeners ---
+    $('input.base-option, input.sweetener-option, input.topping-option').on('change', updateSelection);
+    $('#resetBtn').on('click', resetSelections);
+    // Removed compatibility check button for simplicity, could be added back
+    // $('#checkCompatibilityBtn').on('click', checkCompatibility);
+
+    // --- !! MODIFIED: Add to Order Button Click !! ---
+    $('#addToOrderBtn').on('click', function() {
+        const selectedBase = $('input.base-option:checked');
+        const selectedSweetener = $('input.sweetener-option:checked');
+
+        // Re-validate just in case
+        if (selectedBase.length === 0 || selectedSweetener.length === 0) {
+            alert('请先选择基础饮料和甜度。');
+            return;
+        }
+
+        // Build the drink object
+        const selectedToppings = [];
+        $('input.topping-option:checked').each(function() {
+            selectedToppings.push({
+                id: $(this).val(),
+                name: $(this).data('name'),
+                price: parseFloat($(this).data('price')) || 0
+            });
+        });
+
+        const drinkOrder = {
+            base: {
+                id: selectedBase.val(),
+                name: selectedBase.data('name'),
+                price: parseFloat(selectedBase.data('price')) || 0
+            },
+            sweetener: {
+                id: selectedSweetener.val(),
+                name: selectedSweetener.data('name'),
+                price: parseFloat(selectedSweetener.data('price')) || 0
+            },
+            toppings: selectedToppings,
+            totalPrice: parseFloat($('#totalPrice').text().replace('¥', '')) || 0
+        };
+
+        // --- Save to sessionStorage and Redirect ---
+        try {
+            sessionStorage.setItem('pendingDiyDrink', JSON.stringify(drinkOrder));
+            console.log("DIY Drink saved to sessionStorage:", sessionStorage.getItem('pendingDiyDrink'));
+            // Redirect to order create page WITHOUT query parameters
+            window.location.href = "{{ url_for('order_create') }}";
+        } catch (e) {
+             console.error("Failed to save DIY drink to sessionStorage:", e);
+             alert('添加到订单失败，请重试或联系技术支持。');
+        }
+    });
+
+    // Initial state update
+    updateSelection();
+
+});
+</script>
+{% endblock %}

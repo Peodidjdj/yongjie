@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>库存管理 - 永杰饭庄管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.8.0/font/bootstrap-icons.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('dashboard') }}">永杰饭庄管理系统</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('dashboard') }}">仪表盘</a>
+                    </li>
+
+                    <!-- 销售管理: 店主、厨师、服务员可见 -->
+                    {% if current_user.role in ['owner', 'chef', 'waiter'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            销售管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <!-- 菜单管理: 店主、厨师可见 -->
+                            {% if current_user.role in ['owner', 'chef'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('menu_list') }}">菜单管理</a></li>
+                            {% endif %}
+                            <li><a class="dropdown-item" href="{{ url_for('order_list') }}">订单管理</a></li>
+                            <!-- 创建订单: 店主、服务员可见 -->
+                            {% if current_user.role in ['owner', 'waiter'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('order_create') }}">创建订单</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 会员管理: 店主、服务员可见 -->
+                    {% if current_user.role in ['owner', 'waiter'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            会员管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('member_list') }}">会员列表</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('member_add') }}">添加会员</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 库存管理: 店主、库管可见 -->
+                    {% if current_user.role in ['owner', 'storage'] %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle active" href="#" role="button" data-bs-toggle="dropdown">
+                            库存管理
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item active" href="{{ url_for('inventory_list') }}">库存列表</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('inventory_add') }}">添加原料</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('check_stock') }}">库存预警</a></li>
+                        </ul>
+                    </li>
+                    {% endif %}
+
+                    <!-- 特色业务: 所有人可见 -->
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            特色业务
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('heritage_dishes') }}">传承菜</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('diy_drinks') }}">DIY饮品</a></li>
+                            <!-- 初始化DIY数据: 店主和厨师可见 -->
+                            {% if current_user.role in ['owner', 'chef'] %}
+                            <li><a class="dropdown-item" href="{{ url_for('init_diy_data') }}">初始化DIY数据</a></li>
+                            {% endif %}
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            {{ current_user.username }} ({{ current_user.role|capitalize }})
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#">个人资料</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{{ url_for('logout') }}">退出登录</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ url_for('customer_index') }}" target="_blank">顾客视图</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container py-4">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="alert alert-{{ category }}" role="alert">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>库存管理</h1>
+            <div>
+                <a href="{{ url_for('inventory_add') }}" class="btn btn-primary">
+                    <i class="bi bi-plus-circle"></i> 添加原料
+                </a>
+                <a href="{{ url_for('check_stock') }}" class="btn btn-warning ms-2">
+                    <i class="bi bi-exclamation-triangle"></i> 库存预警
+                    {% if ingredients|selectattr('is_low_stock')|list|length > 0 %}
+                    <span class="badge bg-danger">{{ ingredients|selectattr('is_low_stock')|list|length }}</span>
+                    {% endif %}
+                </a>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <div class="row align-items-center">
+                    <div class="col">
+                        <h5 class="mb-0">原料库存列表</h5>
+                    </div>
+                    <div class="col-auto">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="search-ingredient" placeholder="搜索原料...">
+                            <button class="btn btn-outline-secondary" type="button">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover table-striped mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>ID</th>
+                                <th>原料名称</th>
+                                <th>单位</th>
+                                <th>当前库存</th>
+                                <th>最低库存</th>
+                                <th>库存状态</th>
+                                <th>单价</th>
+                                <th>过期日期</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if ingredients %}
+                                {% for ingredient in ingredients %}
+                                <tr>
+                                    <td>{{ ingredient.id }}</td>
+                                    <td>{{ ingredient.name }}</td>
+                                    <td>{{ ingredient.unit }}</td>
+                                    <td class="fw-bold {% if ingredient.is_low_stock() %}text-danger{% endif %}">
+                                        {{ ingredient.quantity }}
+                                    </td>
+                                    <td>{{ ingredient.min_quantity }}</td>
+                                    <td>
+                                        {% if ingredient.is_low_stock() %}
+                                            <span class="badge bg-danger">库存不足</span>
+                                        {% else %}
+                                            <span class="badge bg-success">库存正常</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>¥{{ ingredient.price_per_unit }}</td>
+                                    <td>
+                                        {% if ingredient.expiry_date %}
+                                            {{ ingredient.expiry_date.strftime('%Y-%m-%d') }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button type="button" class="btn btn-outline-primary update-stock-btn"
+                                                    data-bs-toggle="modal" data-bs-target="#updateStockModal"
+                                                    data-id="{{ ingredient.id }}"
+                                                    data-name="{{ ingredient.name }}"
+                                                    data-quantity="{{ ingredient.quantity }}"
+                                                    data-unit="{{ ingredient.unit }}">
+                                                <i class="bi bi-pencil"></i> 修改
+                                            </button>
+                                            <!-- 删除按钮只对店主显示 -->
+                                            {% if current_user.role == 'owner' %}
+                                            <button type="button" class="btn btn-outline-danger delete-stock-btn"
+                                                    data-bs-toggle="modal" data-bs-target="#deleteStockModal"
+                                                    data-id="{{ ingredient.id }}"
+                                                    data-name="{{ ingredient.name }}">
+                                                <i class="bi bi-trash"></i> 删除
+                                            </button>
+                                            {% endif %}
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="9" class="text-center py-4">暂无原料数据</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">库存统计</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-6">
+                                <div class="border-end">
+                                    <h3 class="fw-bold">{{ ingredients|length }}</h3>
+                                    <p class="text-muted mb-0">原料总数</p>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <h3 class="fw-bold">{{ ingredients|selectattr('is_low_stock')|list|length }}</h3>
+                                <p class="text-muted mb-0">库存不足</p>
+                            </div>
+                        </div>
+                        <hr>
+                        <p class="mb-0">
+                            <i class="bi bi-info-circle"></i> 库存状态说明：当现有库存低于或等于最低库存量时，系统将自动标记为"库存不足"。
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">快速操作</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="list-group">
+                            <a href="{{ url_for('inventory_add') }}" class="list-group-item list-group-item-action">
+                                <i class="bi bi-plus-circle me-2"></i> 添加新原料
+                            </a>
+                            <a href="{{ url_for('check_stock') }}" class="list-group-item list-group-item-action">
+                                <i class="bi bi-exclamation-triangle me-2"></i> 查看库存预警
+                            </a>
+
+                            <!-- 导出功能只对店主和库管主管显示 -->
+                            {% if current_user.role == 'owner' %}
+                            <a href="#" class="list-group-item list-group-item-action" data-bs-toggle="modal" data-bs-target="#exportModal">
+                                <i class="bi bi-file-earmark-excel me-2"></i> 导出库存数据
+                            </a>
+                            {% endif %}
+
+                            <!-- 角色特定提示 -->
+                            <div class="list-group-item bg-light">
+                                <i class="bi bi-person-badge me-2"></i>
+                                <strong>{{ current_user.role|capitalize }} 角色提示:</strong>
+                                {% if current_user.role == 'owner' %}
+                                <span class="small">作为店主，您可以完全管理所有库存信息，包括添加、修改和删除。</span>
+                                {% elif current_user.role == 'storage' %}
+                                <span class="small">作为库管，您可以查看和更新库存数量，为缺货原料补货。</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 修改库存模态框 -->
+    <div class="modal fade" id="updateStockModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">更新原料库存</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="updateStockForm" action="{{ url_for('update_inventory') }}" method="post">
+                        <input type="hidden" id="ingredient-id" name="ingredient_id">
+                        <div class="mb-3">
+                            <label for="ingredient-name" class="form-label">原料名称</label>
+                            <input type="text" class="form-control" id="ingredient-name" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label for="current-quantity" class="form-label">当前库存</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="current-quantity" name="quantity" step="0.01" min="0">
+                                <span class="input-group-text" id="unit-display"></span>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">库存操作</label>
+                            <div class="d-flex">
+                                <button type="button" class="btn btn-outline-success flex-grow-1 me-2" id="addStockBtn">
+                                    <i class="bi bi-plus"></i> 增加库存
+                                </button>
+                                <button type="button" class="btn btn-outline-danger flex-grow-1" id="reduceStockBtn">
+                                    <i class="bi bi-dash"></i> 减少库存
+                                </button>
+                            </div>
+                        </div>
+                        <div id="adjustmentContainer" class="mb-3 d-none">
+                            <label for="adjustment-quantity" class="form-label" id="adjustmentLabel">调整数量</label>
+                            <div class="input-group">
+                                <input type="number" class="form-control" id="adjustment-quantity" step="0.01" min="0">
+                                <span class="input-group-text" id="adjustment-unit-display"></span>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveStockBtn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 删除库存模态框 - 只对店主显示 -->
+    {% if current_user.role == 'owner' %}
+    <div class="modal fade" id="deleteStockModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">删除原料</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>您确定要删除 <span id="delete-ingredient-name" class="fw-bold"></span> 吗？此操作不可恢复。</p>
+                    <form id="deleteStockForm" action="{{ url_for('delete_inventory') }}" method="post">
+                        <input type="hidden" id="delete-ingredient-id" name="ingredient_id">
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-danger" id="confirmDeleteBtn">确认删除</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- 导出数据模态框 - 只对店主显示 -->
+    {% if current_user.role == 'owner' %}
+    <div class="modal fade" id="exportModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">导出库存数据</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p>请选择导出格式：</p>
+                    <div class="list-group">
+                        <button type="button" class="list-group-item list-group-item-action">
+                            <i class="bi bi-file-earmark-excel me-2"></i> Excel 格式 (.xlsx)
+                        </button>
+                        <button type="button" class="list-group-item list-group-item-action">
+                            <i class="bi bi-filetype-csv me-2"></i> CSV 格式 (.csv)
+                        </button>
+                        <button type="button" class="list-group-item list-group-item-action">
+                            <i class="bi bi-filetype-pdf me-2"></i> PDF 格式 (.pdf)
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <footer class="bg-light text-center py-3 mt-5">
+        <div class="container">
+            <p class="mb-0">永杰饭庄管理系统 &copy; 2025</p>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.2.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            // 搜索功能
+            $("#search-ingredient").on("keyup", function() {
+                var value = $(this).val().toLowerCase();
+                $("table tbody tr").filter(function() {
+                    $(this).toggle($(this).text().toLowerCase().indexOf(value) > -1)
+                });
+            });
+
+            // 修改库存模态框
+            $('.update-stock-btn').click(function() {
+                const id = $(this).data('id');
+                const name = $(this).data('name');
+                const quantity = $(this).data('quantity');
+                const unit = $(this).data('unit');
+
+                $('#ingredient-id').val(id);
+                $('#ingredient-name').val(name);
+                $('#current-quantity').val(quantity);
+                $('#unit-display').text(unit);
+                $('#adjustment-unit-display').text(unit);
+
+                // 重置调整区域
+                $('#adjustmentContainer').addClass('d-none');
+                $('#adjustment-quantity').val('');
+            });
+
+            // 增加库存按钮
+            $('#addStockBtn').click(function() {
+                $('#adjustmentContainer').removeClass('d-none');
+                $('#adjustmentLabel').text('增加数量');
+                $('#adjustment-quantity').val('');
+                $('#adjustment-quantity').focus();
+            });
+
+            // 减少库存按钮
+            $('#reduceStockBtn').click(function() {
+                $('#adjustmentContainer').removeClass('d-none');
+                $('#adjustmentLabel').text('减少数量');
+                $('#adjustment-quantity').val('');
+                $('#adjustment-quantity').focus();
+            });
+
+            // 调整数量变化时自动计算新库存
+            $('#adjustment-quantity').on('input', function() {
+                const currentQty = parseFloat($('#current-quantity').val()) || 0;
+                const adjustQty = parseFloat($(this).val()) || 0;
+
+                if ($('#adjustmentLabel').text() === '增加数量') {
+                    $('#current-quantity').val((currentQty + adjustQty).toFixed(2));
+                } else {
+                    if (currentQty >= adjustQty) {
+                        $('#current-quantity').val((currentQty - adjustQty).toFixed(2));
+                    } else {
+                        alert('减少的数量不能大于当前库存!');
+                        $(this).val('');
+                    }
+                }
+            });
+
+            // 保存库存修改
+            $('#saveStockBtn').click(function() {
+                // 直接提交表单
+                $('#updateStockForm').submit();
+            });
+
+            // 删除库存模态框
+            $('.delete-stock-btn').click(function() {
+                const id = $(this).data('id');
+                const name = $(this).data('name');
+
+                $('#delete-ingredient-id').val(id);
+                $('#delete-ingredient-name').text(name);
+            });
+
+            // 确认删除
+            $('#confirmDeleteBtn').click(function() {
+                // 直接提交删除表单
+                $('#deleteStockForm').submit();
+            });
+        });
+    </script>
+</body>
+</html>
